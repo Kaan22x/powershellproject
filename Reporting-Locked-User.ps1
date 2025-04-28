@@ -1,16 +1,31 @@
 # AD modülünü içe aktar
 Import-Module ActiveDirectory
 
-# Kilitlenen kullanıcıları bul (son 30 dakika içinde)
-$TimeFrame = (Get-Date).AddMinutes(-30)
-$LockedUsers = Search-ADAccount -LockedOut | Where-Object { $_.WhenChanged -ge $TimeFrame }
+# Tüm Domain Controller'ları al
+$DCs = Get-ADDomainController -Filter *
+
+# Kilitlenen kullanıcıları depolamak için bir array oluştur
+$LockedUsers = @()
+
+# Her bir DC üzerinde sorgu yap
+foreach ($DC in $DCs) {
+    Write-Output "Sorgulanan DC: $($DC.Name)"
+    
+    # Her DC üzerinde kilitli kullanıcıları sorgula
+    $Users = Search-ADAccount -Server $DC.Name -LockedOut
+    
+    # Kilitli kullanıcı varsa array'e ekle
+    if ($Users) {
+        $LockedUsers += $Users
+    }
+}
 
 # Kilitlenen kullanıcı varsa e-posta gönder
-if ($LockedUsers) {
+if ($LockedUsers.Count -gt 0) {
     $Body = ""
     foreach ($User in $LockedUsers) {
         $Body += "Kullanici Adi: $($User.SamAccountName)`n"
-        $Body += "İsim: $($User.Name)`n"
+        $Body += "isim: $($User.Name)`n"
         $Body += "OU: $($User.DistinguishedName)`n"
         $Body += "Tarih: $(Get-Date)`n"
         $Body += "`n----------------------`n"
@@ -27,4 +42,6 @@ if ($LockedUsers) {
     }
 
     Send-MailMessage @MailParams
+} else {
+    Write-Output "Kilitlenen kullanıcı bulunamadı."
 }
